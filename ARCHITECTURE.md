@@ -30,6 +30,12 @@ flowchart TB
             R3["/basins"]
             R4["/levels"]
             R5["/alerts"]
+            R6["/dashboard"]
+        end
+
+        subgraph Static["Static Files"]
+            Dashboard["dashboard.html
+            (Leaflet Map)"]
         end
     end
 
@@ -38,6 +44,7 @@ flowchart TB
         Routes --> Mobile["Mobile Apps"]
         Routes --> Alerts["Alert Systems"]
         Routes --> Analysis["Data Analysis"]
+        Dashboard --> Routes
     end
 ```
 
@@ -85,8 +92,10 @@ lk_flood_api/
 │   │   ├── basins.py        # GET /basins, /basins/{name}, /basins/{name}/rivers
 │   │   ├── levels.py        # GET /levels/latest, /levels/history, /levels/map, /levels/chart
 │   │   └── alerts.py        # GET /alerts, /alerts/summary
-│   └── services/
-│       └── github_data.py   # Data fetching, caching, calculations
+│   ├── services/
+│   │   └── github_data.py   # Data fetching, caching, calculations
+│   └── static/
+│       └── dashboard.html   # Interactive map dashboard (Leaflet.js)
 ├── requirements.txt
 ├── vercel.json
 └── README.md
@@ -214,6 +223,28 @@ sequenceDiagram
 | [httpx](https://www.python-httpx.org/) | Async HTTP client |
 | [Pydantic](https://docs.pydantic.dev/) | Data validation |
 | [cachetools](https://cachetools.readthedocs.io/) | TTL-based caching |
+| [Leaflet.js](https://leafletjs.com/) | Interactive map (dashboard) |
+
+## Dashboard
+
+The `/dashboard` endpoint serves a single-page application that visualizes flood data:
+
+```mermaid
+flowchart LR
+    Browser["Browser"] -->|GET /dashboard| Server["FastAPI"]
+    Server -->|dashboard.html| Browser
+    Browser -->|Fetch /stations, /levels/latest, /alerts/summary| Server
+    Server -->|JSON| Browser
+    Browser -->|Render| Map["Leaflet Map + Station List"]
+```
+
+**Features:**
+- Interactive map with color-coded station markers
+- Sidebar with filterable station list (MAJOR first)
+- Filter buttons by alert level
+- Auto-refresh every 5 minutes
+- Mobile responsive design
+- Dark theme using CartoDB tiles
 
 ## Design Decisions
 

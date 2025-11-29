@@ -2,17 +2,28 @@
 
 REST API for Sri Lanka river water level and flood monitoring data.
 
-**Live API:** https://lk-flood-api-git-main-yranganas-projects.vercel.app
+**Live Dashboard:** https://lk-flood-api-git-main-yranganas-projects.vercel.app/dashboard
 
 **API Docs:** https://lk-flood-api-git-main-yranganas-projects.vercel.app/docs
 
 ## Features
 
+- **Interactive Dashboard** - Map view with color-coded station markers, filterable by alert level
 - Real-time water level data for 39 gauging stations
 - Alert status classification (MAJOR, MINOR, ALERT, NORMAL)
 - Historical water level readings
 - River and basin information
 - Flood map and station chart images
+
+## Dashboard
+
+The dashboard provides a real-time map visualization of all flood monitoring stations:
+
+- Color-coded markers by alert status (red=MAJOR, orange=MINOR, yellow=ALERT, green=NORMAL)
+- Sidebar with sortable station list (most severe first)
+- Filter buttons to show only specific alert levels
+- Click any station to see details and threshold levels
+- Auto-refreshes every 5 minutes
 
 ## Data Flow
 
