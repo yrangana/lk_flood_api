@@ -1,8 +1,12 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 
 from app.routes import stations, rivers, basins, levels, alerts
+
+STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(
     title="Sri Lanka Flood Data API",
@@ -35,7 +39,12 @@ app.include_router(alerts.router, prefix="/alerts", tags=["Alerts"])
 
 @app.get("/", include_in_schema=False)
 async def root():
-    return RedirectResponse(url="/docs")
+    return RedirectResponse(url="/dashboard")
+
+
+@app.get("/dashboard", include_in_schema=False)
+async def dashboard():
+    return FileResponse(STATIC_DIR / "dashboard.html")
 
 
 @app.get("/health", tags=["Health"])
