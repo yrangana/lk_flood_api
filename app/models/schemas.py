@@ -39,8 +39,12 @@ class WaterLevelReading(BaseModel):
     station_name: str
     river_name: str
     water_level: float | None
+    previous_water_level: float | None
     alert_status: AlertLevel
     flood_score: float | None
+    rising_or_falling: str | None
+    rainfall_mm: float | None
+    remarks: str | None
     timestamp: str
 
 

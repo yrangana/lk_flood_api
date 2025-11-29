@@ -30,8 +30,12 @@ async def get_latest_levels():
                     station_name=station_name,
                     river_name=station["river_name"],
                     water_level=water_level,
+                    previous_water_level=level.get("previous_water_level"),
                     alert_status=alert_status,
                     flood_score=flood_score,
+                    rising_or_falling=level.get("rising_or_falling"),
+                    rainfall_mm=level.get("rainfall_mm"),
+                    remarks=level.get("remarks"),
                     timestamp=level.get("time_str", ""),
                 )
             )
@@ -65,8 +69,12 @@ async def get_station_history(station_name: str, limit: int = 50):
                         station_name=station_name,
                         river_name=station["river_name"],
                         water_level=water_level,
+                        previous_water_level=level.get("previous_water_level"),
                         alert_status=alert_status,
                         flood_score=flood_score,
+                        rising_or_falling=level.get("rising_or_falling"),
+                        rainfall_mm=level.get("rainfall_mm"),
+                        remarks=level.get("remarks"),
                         timestamp=level.get("time_str", ""),
                     )
                 )

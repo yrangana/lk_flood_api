@@ -42,8 +42,12 @@ async def get_station(name: str):
                 station_name=name,
                 river_name=station["river_name"],
                 water_level=water_level,
+                previous_water_level=level.get("previous_water_level"),
                 alert_status=alert_status,
                 flood_score=flood_score,
+                rising_or_falling=level.get("rising_or_falling"),
+                rainfall_mm=level.get("rainfall_mm"),
+                remarks=level.get("remarks"),
                 timestamp=level.get("time_str", ""),
             )
             break
