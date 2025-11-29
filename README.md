@@ -77,22 +77,6 @@ uvicorn app.main:app --reload
 
 Visit http://localhost:8000/docs for interactive API documentation (Swagger UI).
 
-## Deployment
-
-### Vercel (Recommended)
-
-1. Push this repo to GitHub
-2. Import to [Vercel](https://vercel.com)
-3. Deploy (zero configuration needed)
-
-### Other Platforms
-
-Works with any platform supporting Python ASGI:
-- [Railway](https://railway.app)
-- [Render](https://render.com)
-- [Google Cloud Run](https://cloud.google.com/run)
-- AWS Lambda (with [Mangum](https://github.com/jordaneremieff/mangum) adapter)
-
 ## Data Source & Acknowledgments
 
 This API consumes data from [**nuuuwan/lk_dmc_vis**](https://github.com/nuuuwan/lk_dmc_vis), an open-source data pipeline by [@nuuuwan](https://github.com/nuuuwan) that:
