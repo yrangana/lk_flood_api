@@ -2,6 +2,10 @@
 
 REST API for Sri Lanka river water level and flood monitoring data.
 
+**Live API:** https://lk-flood-api-git-main-yranganas-projects.vercel.app
+
+**API Docs:** https://lk-flood-api-git-main-yranganas-projects.vercel.app/docs
+
 ## Features
 
 - Real-time water level data for 39 gauging stations
