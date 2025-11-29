@@ -11,7 +11,7 @@ app = FastAPI(
     version="1.0.0",
     contact={
         "name": "GitHub Repository",
-        "url": "https://github.com/nuuuwan/lk_dmc_vis",
+        "url": "https://github.com/yrangana/lk_flood_api",
     },
     license_info={
         "name": "MIT",
