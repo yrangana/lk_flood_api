@@ -18,10 +18,16 @@ REST API for Sri Lanka river water level and flood monitoring data.
 
 ```mermaid
 flowchart LR
-    DMC[("Sri Lanka DMC\n(PDF Reports)")] --> Pipeline
-    Pipeline["nuuuwan/lk_dmc_vis\n(Data Pipeline)"] --> GitHub[("GitHub\nRaw Files")]
-    GitHub --> API["This API\n(FastAPI)"]
-    API --> Apps["Web Apps\nMobile Apps\nAlert Systems"]
+    DMC[("Sri Lanka DMC
+    (PDF Reports)")] --> Pipeline
+    Pipeline["nuuuwan/lk_dmc_vis
+    (Data Pipeline)"] --> GitHub[("GitHub
+    Raw Files")]
+    GitHub --> API["This API
+    (FastAPI)"]
+    API --> Apps["Web Apps
+    Mobile Apps
+    Alert Systems"]
 ```
 
 ## API Endpoints

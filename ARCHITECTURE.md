@@ -9,14 +9,19 @@ This is a stateless FastAPI REST API that wraps flood monitoring data from Sri L
 ```mermaid
 flowchart TB
     subgraph External["External Data Source"]
-        DMC["Sri Lanka DMC\ndmc.gov.lk"] -->|PDF Reports| Pipeline
-        Pipeline["nuuuwan/lk_dmc_vis\n(GitHub Actions)"]
-        Pipeline -->|Every 15 min| GH[("GitHub Repository\nraw.githubusercontent.com")]
+        DMC["Sri Lanka DMC
+        dmc.gov.lk"] -->|PDF Reports| Pipeline
+        Pipeline["nuuuwan/lk_dmc_vis
+        (GitHub Actions)"]
+        Pipeline -->|Every 15 min| GH[("GitHub Repository
+        raw.githubusercontent.com")]
     end
 
     subgraph API["This API (FastAPI)"]
-        GH -->|HTTPS| Service["github_data.py\nData Service"]
-        Service --> Cache[("TTLCache\n15 min TTL")]
+        GH -->|HTTPS| Service["github_data.py
+        Data Service"]
+        Service --> Cache[("TTLCache
+        15 min TTL")]
         Cache --> Routes
 
         subgraph Routes["Route Handlers"]
@@ -43,19 +48,26 @@ The upstream [nuuuwan/lk_dmc_vis](https://github.com/nuuuwan/lk_dmc_vis) reposit
 ```mermaid
 flowchart LR
     subgraph Static["Static Data"]
-        GS["gauging_stations.json\n(39 stations)"]
-        RV["rivers.json\n(26 rivers)"]
-        RB["river_basins.json\n(18 basins)"]
+        GS["gauging_stations.json
+        (39 stations)"]
+        RV["rivers.json
+        (26 rivers)"]
+        RB["river_basins.json
+        (18 basins)"]
     end
 
     subgraph Dynamic["Dynamic Data (Updated Every 15 min)"]
-        IDX["docs_last100.tsv\n(Report Index)"]
-        JSON["jsons/*.json\n(Water Level Data)"]
+        IDX["docs_last100.tsv
+        (Report Index)"]
+        JSON["jsons/*.json
+        (Water Level Data)"]
     end
 
     subgraph Images["Generated Images"]
-        MAP["map.png\n(Flood Map)"]
-        CHARTS["stations/*.png\n(Station Charts)"]
+        MAP["map.png
+        (Flood Map)"]
+        CHARTS["stations/*.png
+        (Station Charts)"]
     end
 ```
 
@@ -84,11 +96,14 @@ lk_flood_api/
 
 ```mermaid
 flowchart TD
-    WL["Water Level Reading"] --> Check1{">= Major\nFlood Level?"}
+    WL["Water Level Reading"] --> Check1{">= Major
+    Flood Level?"}
     Check1 -->|Yes| MAJOR["MAJOR"]
-    Check1 -->|No| Check2{">= Minor\nFlood Level?"}
+    Check1 -->|No| Check2{">= Minor
+    Flood Level?"}
     Check2 -->|Yes| MINOR["MINOR"]
-    Check2 -->|No| Check3{">= Alert\nLevel?"}
+    Check2 -->|No| Check3{">= Alert
+    Level?"}
     Check3 -->|Yes| ALERT["ALERT"]
     Check3 -->|No| Check4{"Has Data?"}
     Check4 -->|Yes| NORMAL["NORMAL"]
