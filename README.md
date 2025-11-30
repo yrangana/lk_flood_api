@@ -2,30 +2,29 @@
 
 REST API for Sri Lanka river water level and flood monitoring data.
 
-**API Swagger UI:** https://lk-flood-api.vercel.app/docs
+**Live API:** https://lk-flood-api.vercel.app
 
-**API Docs:** https://lk-flood-api.vercel.app/redoc
-
-**Sample Live Dashboard:** https://lk-flood-api.vercel.app/dashboard
+| Documentation | URL |
+|--------------|-----|
+| Swagger UI | https://lk-flood-api.vercel.app/docs |
+| ReDoc | https://lk-flood-api.vercel.app/redoc |
+| OpenAPI Spec | https://lk-flood-api.vercel.app/openapi.json |
 
 ## Features
 
-- **Interactive Dashboard** - Map view with color-coded station markers, filterable by alert level
 - Real-time water level data for 39 gauging stations
 - Alert status classification (MAJOR, MINOR, ALERT, NORMAL)
 - Historical water level readings
 - River and basin information
 - Flood map and station chart images
 
-## Dashboard
+## API Documentation
 
-The dashboard provides a real-time map visualization of all flood monitoring stations:
+### Swagger UI
+![Swagger UI](docs/api-swagger.png)
 
-- Color-coded markers by alert status (red=MAJOR, orange=MINOR, yellow=ALERT, green=NORMAL)
-- Sidebar with sortable station list (most severe first)
-- Filter buttons to show only specific alert levels
-- Click any station to see details and threshold levels
-- Auto-refreshes every 5 minutes
+### ReDoc
+![ReDoc](docs/api-redoc.png)
 
 ## Data Flow
 
