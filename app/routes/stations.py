@@ -33,22 +33,18 @@ async def get_station(name: str):
     latest_reading = None
 
     for level in levels:
-        if level.get("gauging_station_name", "").lower() == name.lower():
-            water_level = level.get("current_water_level")
-            alert_status = github_data.calculate_alert_status(water_level, station)
-            flood_score = github_data.calculate_flood_score(water_level, station)
-
+        if level.get("station_name", "").lower() == name.lower():
             latest_reading = WaterLevelReading(
-                station_name=name,
-                river_name=station["river_name"],
-                water_level=water_level,
+                station_name=level["station_name"],
+                river_name=level["river_name"],
+                water_level=level.get("water_level"),
                 previous_water_level=level.get("previous_water_level"),
-                alert_status=alert_status,
-                flood_score=flood_score,
+                alert_status=level["alert_status"],
+                flood_score=level.get("flood_score"),
                 rising_or_falling=level.get("rising_or_falling"),
                 rainfall_mm=level.get("rainfall_mm"),
                 remarks=level.get("remarks"),
-                timestamp=level.get("time_str", ""),
+                timestamp=level.get("timestamp", ""),
             )
             break
 

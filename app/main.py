@@ -53,5 +53,5 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "lk-flood-api",
-        "data_source": "https://github.com/nuuuwan/lk_dmc_vis",
+        "data_source": "https://github.com/nuuuwan/dmc_gov_lk_2024",
     }

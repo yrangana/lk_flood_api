@@ -9,35 +9,26 @@ router = APIRouter()
 async def get_active_alerts():
     """Get all stations currently in ALERT, MINOR, or MAJOR status."""
     levels = await github_data.get_latest_water_levels()
-    stations = await github_data.get_gauging_stations()
-
-    station_map = {s["name"].lower(): s for s in stations}
     alerts = []
 
     for level in levels:
-        station_name = level.get("gauging_station_name", "")
-        station = station_map.get(station_name.lower())
+        alert_status = level.get("alert_status", "NO_DATA")
 
-        if station:
-            water_level = level.get("current_water_level")
-            alert_status = github_data.calculate_alert_status(water_level, station)
-
-            if alert_status in ["ALERT", "MINOR", "MAJOR"]:
-                flood_score = github_data.calculate_flood_score(water_level, station)
-                alerts.append(
-                    WaterLevelReading(
-                        station_name=station_name,
-                        river_name=station["river_name"],
-                        water_level=water_level,
-                        previous_water_level=level.get("previous_water_level"),
-                        alert_status=alert_status,
-                        flood_score=flood_score,
-                        rising_or_falling=level.get("rising_or_falling"),
-                        rainfall_mm=level.get("rainfall_mm"),
-                        remarks=level.get("remarks"),
-                        timestamp=level.get("time_str", ""),
-                    )
+        if alert_status in ["ALERT", "MINOR", "MAJOR"]:
+            alerts.append(
+                WaterLevelReading(
+                    station_name=level["station_name"],
+                    river_name=level["river_name"],
+                    water_level=level.get("water_level"),
+                    previous_water_level=level.get("previous_water_level"),
+                    alert_status=alert_status,
+                    flood_score=level.get("flood_score"),
+                    rising_or_falling=level.get("rising_or_falling"),
+                    rainfall_mm=level.get("rainfall_mm"),
+                    remarks=level.get("remarks"),
+                    timestamp=level.get("timestamp", ""),
                 )
+            )
 
     # Sort by severity: MAJOR > MINOR > ALERT
     severity_order = {"MAJOR": 0, "MINOR": 1, "ALERT": 2}
@@ -50,9 +41,7 @@ async def get_active_alerts():
 async def get_alert_summary():
     """Get a summary count of stations by alert level."""
     levels = await github_data.get_latest_water_levels()
-    stations = await github_data.get_gauging_stations()
 
-    station_map = {s["name"].lower(): s for s in stations}
     counts: dict[str, list[str]] = {
         "MAJOR": [],
         "MINOR": [],
@@ -62,12 +51,9 @@ async def get_alert_summary():
     }
 
     for level in levels:
-        station_name = level.get("gauging_station_name", "")
-        station = station_map.get(station_name.lower())
-
-        if station:
-            water_level = level.get("current_water_level")
-            alert_status = github_data.calculate_alert_status(water_level, station)
+        alert_status = level.get("alert_status", "NO_DATA")
+        station_name = level.get("station_name", "")
+        if alert_status in counts:
             counts[alert_status].append(station_name)
 
     return [
