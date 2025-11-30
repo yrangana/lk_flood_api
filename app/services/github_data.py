@@ -3,8 +3,8 @@ from cachetools import TTLCache
 from functools import wraps
 from datetime import datetime
 
-BASE_URL = "https://raw.githubusercontent.com/nuuuwan/dmc_gov_lk_2024/main"
-GITHUB_API_URL = "https://api.github.com/repos/nuuuwan/dmc_gov_lk_2024/contents"
+BASE_URL = "https://raw.githubusercontent.com/nuuuwan/lk_dmc_vis/main"
+GITHUB_API_URL = "https://api.github.com/repos/nuuuwan/lk_dmc_vis/contents"
 
 # Cache data for 15 minutes (900 seconds) - matches pipeline update frequency
 cache = TTLCache(maxsize=100, ttl=900)
@@ -38,14 +38,14 @@ async def fetch_json(path: str) -> dict | list | None:
 @cached(lambda: "latest_water_level_file")
 async def get_latest_water_level_filename() -> str | None:
     """Get the most recent water level file by listing the directory."""
-    url = f"{GITHUB_API_URL}/data-parsed/river-water-level-and-flood-warnings"
+    url = f"{GITHUB_API_URL}/data/jsons"
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, timeout=30.0)
             response.raise_for_status()
             files = response.json()
-            # Filter for JSON files and sort by name (YYYYMMDD.HHMMSS.json format)
-            json_files = [f["name"] for f in files if f["name"].endswith(".json")]
+            # Filter for water-level JSON files and sort by name (YYYY-MM-DD-HH-MM format)
+            json_files = [f["name"] for f in files if f["name"].endswith("-water-level.json")]
             if not json_files:
                 return None
             # Sort and get the latest
@@ -84,8 +84,8 @@ async def get_gauging_stations() -> list[dict]:
 
 @cached(lambda: "stations_static")
 async def get_stations_static() -> list[dict]:
-    """Get static station data with coordinates."""
-    data = await fetch_json("data-static/stations.json")
+    """Get static station data with coordinates and thresholds."""
+    data = await fetch_json("data/static/gauging_stations.json")
     return data if data else []
 
 
@@ -164,62 +164,79 @@ async def get_latest_water_levels() -> list[dict]:
     if not filename:
         return []
 
-    data = await fetch_json(f"data-parsed/river-water-level-and-flood-warnings/{filename}")
+    data = await fetch_json(f"data/jsons/{filename}")
     if not data:
         return []
 
-    # Get static station data for coordinates
+    # lk_dmc_vis format: {"d_list": [...]}
+    d_list = data.get("d_list", []) if isinstance(data, dict) else data
+
+    # Get static station data for coordinates and thresholds
     static_stations = await get_stations_static()
-    station_coords = {}
+    station_data = {}
     for s in static_stations:
         normalized = normalize_station_name(s.get("name", ""))
-        station_coords[normalized] = s.get("latLng", [0, 0])
+        station_data[normalized] = {
+            "lat_lng": s.get("lat_lng", [0, 0]),
+            "river_name": s.get("river_name", ""),
+            "alert_level": s.get("alert_level", 0),
+            "minor_flood_level": s.get("minor_flood_level", 0),
+            "major_flood_level": s.get("major_flood_level", 0),
+        }
 
     # Transform to our API format
     results = []
-    for item in data:
-        station_name = item.get("station", "")
-        water_level = item.get("water_level_2")  # Latest reading
-        prev_water_level = item.get("water_level_1")  # Previous reading
+    for item in d_list:
+        station_name = item.get("gauging_station_name", "")
+        water_level = item.get("current_water_level")
+        prev_water_level = item.get("previous_water_level")
 
-        # Get coordinates
+        # Get static data for this station
         normalized_name = normalize_station_name(station_name)
-        lat_lng = station_coords.get(normalized_name, [0, 0])
+        static = station_data.get(normalized_name, {})
+        lat_lng = static.get("lat_lng", [0, 0])
+        river_name = static.get("river_name", "")
 
-        # Calculate alert status
-        alert_level = item.get("alert_level", 0)
-        minor_flood_level = item.get("minor_flood_level", 0)
-        major_flood_level = item.get("major_flood_level", 0)
+        # Get alert thresholds from static data
+        alert_level = static.get("alert_level", 0)
+        minor_flood_level = static.get("minor_flood_level", 0)
+        major_flood_level = static.get("major_flood_level", 0)
 
-        alert_status = calculate_alert_status(water_level, {
-            "alert_level": alert_level,
-            "minor_flood_level": minor_flood_level,
-            "major_flood_level": major_flood_level,
-        })
+        # Calculate alert status from thresholds or derive from remarks
+        remarks = item.get("remarks", "")
+        if water_level is not None and alert_level > 0:
+            alert_status = calculate_alert_status(water_level, {
+                "alert_level": alert_level,
+                "minor_flood_level": minor_flood_level,
+                "major_flood_level": major_flood_level,
+            })
+        elif "Major Flood" in remarks:
+            alert_status = "MAJOR"
+        elif "Minor Flood" in remarks:
+            alert_status = "MINOR"
+        elif "Alert" in remarks:
+            alert_status = "ALERT"
+        elif water_level is not None:
+            alert_status = "NORMAL"
+        else:
+            alert_status = "NO_DATA"
 
+        # Calculate flood score if we have thresholds
         flood_score = calculate_flood_score(water_level, {
             "alert_level": alert_level,
             "major_flood_level": major_flood_level,
-        })
+        }) if alert_level > 0 else None
 
-        # Convert unix timestamp to datetime string
-        ut = item.get("ut_water_level_2") or item.get("ut")
-        timestamp = ""
-        if ut:
-            timestamp = datetime.fromtimestamp(ut).strftime("%Y-%m-%d %H:%M:%S")
+        # Get timestamp from time_str
+        timestamp = item.get("time_str", "")
 
-        # Determine rising/falling from remarks or calculate
-        rising_or_falling = item.get("remarks_rising", "")
-        if not rising_or_falling and water_level and prev_water_level:
-            if water_level > prev_water_level:
-                rising_or_falling = "Rising"
-            elif water_level < prev_water_level:
-                rising_or_falling = "Falling"
+        # Get rising/falling status
+        rising_or_falling = item.get("rising_or_falling", "")
 
         results.append({
             "station_name": station_name,
-            "river_name": item.get("river", ""),
-            "river_basin_name": item.get("river_basin", ""),
+            "river_name": river_name,
+            "river_basin_name": "",  # Not available in this format
             "lat_lng": lat_lng,
             "water_level": water_level,
             "previous_water_level": prev_water_level,
@@ -229,8 +246,8 @@ async def get_latest_water_levels() -> list[dict]:
             "alert_status": alert_status,
             "flood_score": flood_score,
             "rising_or_falling": rising_or_falling,
-            "rainfall_mm": item.get("rainfall", 0),
-            "remarks": item.get("remarks", ""),
+            "rainfall_mm": item.get("rainfall_mm", 0),
+            "remarks": remarks,
             "timestamp": timestamp,
         })
 
