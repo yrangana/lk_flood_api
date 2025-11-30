@@ -83,6 +83,11 @@ flowchart LR
 | GET | `/alerts` | Stations in ALERT/MINOR/MAJOR status |
 | GET | `/alerts/summary` | Count of stations by alert level |
 
+### Dashboard
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/demo/stations` | Interactive map showing station locations and alert status |
+
 ## Local Development
 
 ```bash

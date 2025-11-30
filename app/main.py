@@ -39,11 +39,12 @@ app.include_router(alerts.router, prefix="/alerts", tags=["Alerts"])
 
 @app.get("/", include_in_schema=False)
 async def root():
-    return RedirectResponse(url="/dashboard")
+    return RedirectResponse(url="/docs")
 
 
-@app.get("/dashboard", include_in_schema=False)
+@app.get("/demo/stations", tags=["Dashboard"])
 async def dashboard():
+    """Interactive map showing all gauging stations with real-time alert status."""
     return FileResponse(STATIC_DIR / "dashboard.html")
 
 

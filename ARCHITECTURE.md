@@ -30,7 +30,7 @@ flowchart TB
             R3["/basins"]
             R4["/levels"]
             R5["/alerts"]
-            R6["/dashboard"]
+            R6["/demo/stations"]
         end
 
         subgraph Static["Static Files"]
@@ -225,13 +225,13 @@ sequenceDiagram
 | [cachetools](https://cachetools.readthedocs.io/) | TTL-based caching |
 | [Leaflet.js](https://leafletjs.com/) | Interactive map (dashboard) |
 
-## Dashboard
+## Demo Dashboard
 
-The `/dashboard` endpoint serves a single-page application that visualizes flood data:
+The `/demo/stations` endpoint serves a single-page application that visualizes station data:
 
 ```mermaid
 flowchart LR
-    Browser["Browser"] -->|GET /dashboard| Server["FastAPI"]
+    Browser["Browser"] -->|GET /demo/stations| Server["FastAPI"]
     Server -->|dashboard.html| Browser
     Browser -->|Fetch /stations, /levels/latest, /alerts/summary| Server
     Server -->|JSON| Browser
