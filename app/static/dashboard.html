@@ -37,6 +37,17 @@
             font-size: 0.75rem;
             color: #888;
         }
+        .header-credits {
+            font-size: 0.7rem;
+            color: #888;
+        }
+        .header-credits a {
+            color: #6db3f2;
+            text-decoration: none;
+        }
+        .header-credits a:hover {
+            text-decoration: underline;
+        }
         .header-stats {
             display: flex;
             gap: 1rem;
@@ -191,6 +202,21 @@
             margin: 0.25rem 0;
             font-size: 0.875rem;
         }
+        .popup-chart-btn {
+            background: #0f3460;
+            border: none;
+            color: #fff;
+            padding: 0.4rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        .popup-chart-btn:hover {
+            background: #1a4a7a;
+        }
         .loading {
             display: flex;
             justify-content: center;
@@ -262,20 +288,38 @@
         .modal-loading {
             color: #888;
         }
+        .modal-footer {
+            padding: 0.75rem 1rem;
+            background: #0f3460;
+            font-size: 0.75rem;
+            color: #aaa;
+            text-align: center;
+        }
+        .modal-footer a {
+            color: #6db3f2;
+            text-decoration: none;
+        }
+        .modal-footer a:hover {
+            text-decoration: underline;
+        }
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
+                height: calc(100vh - 80px);
             }
             .sidebar {
                 width: 100%;
-                height: 40vh;
+                height: 40%;
                 border-left: none;
                 border-top: 1px solid #0f3460;
             }
             #map {
-                height: 60vh;
+                height: 60%;
             }
             .header-stats {
+                display: none;
+            }
+            .header-credits {
                 display: none;
             }
         }
@@ -286,6 +330,11 @@
         <div class="header-left">
             <h1>Sri Lanka Flood Monitor</h1>
             <span class="last-updated" id="last-updated">Loading...</span>
+            <span class="header-credits">
+                <a href="https://github.com/yrangana/lk_flood_api" target="_blank">API</a> |
+                <a href="https://github.com/nuuuwan/lk_dmc_vis" target="_blank">Data by nuuuwan</a> |
+                <a href="https://www.dmc.gov.lk" target="_blank">Source: DMC</a>
+            </span>
         </div>
         <div class="header-stats" id="header-stats"></div>
     </div>
@@ -308,7 +357,6 @@
             </div>
         </div>
     </div>
-
     <!-- Chart Modal -->
     <div class="modal-overlay" id="chart-modal" onclick="closeModal(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
@@ -318,6 +366,9 @@
             </div>
             <div class="modal-body" id="modal-body">
                 <span class="modal-loading">Loading chart...</span>
+            </div>
+            <div class="modal-footer">
+                Chart by <a href="https://github.com/nuuuwan/lk_dmc_vis" target="_blank">nuuuwan/lk_dmc_vis</a> | Data from <a href="https://www.dmc.gov.lk" target="_blank">Sri Lanka DMC</a>
             </div>
         </div>
     </div>
@@ -517,6 +568,7 @@
                         <p><strong>Water Level:</strong> ${level?.water_level?.toFixed(2) || 'N/A'} m</p>
                         <p><strong>Status:</strong> ${status}</p>
                         ${level?.rising_or_falling ? `<p><strong>Trend:</strong> ${level.rising_or_falling}</p>` : ''}
+                        <button class="popup-chart-btn" onclick="showChart('${station.name}')">📈 View Chart</button>
                         <p><strong>Alert Level:</strong> ${station.alert_level} m</p>
                         <p><strong>Minor Flood:</strong> ${station.minor_flood_level} m</p>
                         <p><strong>Major Flood:</strong> ${station.major_flood_level} m</p>
