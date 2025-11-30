@@ -93,8 +93,16 @@ async def get_latest_water_levels() -> list[dict]:
     if not docs:
         return []
 
-    # Get most recent document
-    latest_doc = docs[0]
+    # Get most recent water-level document (skip flood warnings which don't have JSON files)
+    latest_doc = None
+    for doc in docs:
+        if "water-level" in doc["id"]:
+            latest_doc = doc
+            break
+
+    if not latest_doc:
+        return []
+
     data = await get_water_level_data(latest_doc["id"])
 
     if not data or "d_list" not in data:
