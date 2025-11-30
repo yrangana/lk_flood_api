@@ -89,9 +89,29 @@ async def get_stations_static() -> list[dict]:
     return data if data else []
 
 
+# Mapping from water level station names to static station names
+# (water level data uses different spellings than stations.json)
+STATION_NAME_MAP = {
+    "Nagalagam Street": "N' Street",
+    "Kithulgala": "Kitulgala",
+    "Rathnapura": "Ratnapura",
+    "Thawalama": "Tawalama",
+    "Thanamalwila": "Tanamalwila",
+    "Thaldena": "Taldena",
+    "Horowpothana": "Horowpatana",
+    "Yaka Wewa": "Yakawewa",
+    "Thanthirimale": "Tantirimale",
+    "Padiyathalawa": "Padiyatalawa",
+    "Manampitiya": "Manampitiya (HMIS)",
+    "Weraganthota": "Weragantota",
+}
+
+
 def normalize_station_name(name: str) -> str:
-    """Normalize station name for matching."""
-    return name.lower().replace("'", "").replace(" ", "").replace("(", "").replace(")", "")
+    """Normalize station name for matching with static data."""
+    # First check if there's a known mapping
+    mapped_name = STATION_NAME_MAP.get(name, name)
+    return mapped_name.lower().replace("'", "").replace(" ", "").replace("(", "").replace(")", "")
 
 
 @cached(lambda: "rivers")
