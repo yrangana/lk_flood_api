@@ -417,7 +417,9 @@
 
         function formatTimestamp(ts) {
             if (!ts) return 'N/A';
-            return new Date(ts).toLocaleString('en-LK', {
+            // Convert "2025-11-30 12:30:00" to ISO format for proper parsing
+            const isoTs = ts.replace(' ', 'T') + '+05:30'; // Sri Lanka timezone
+            return new Date(isoTs).toLocaleString('en-LK', {
                 timeZone: 'Asia/Colombo',
                 month: 'short',
                 day: 'numeric',
