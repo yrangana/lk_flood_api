@@ -2,9 +2,11 @@
 
 REST API for Sri Lanka river water level and flood monitoring data.
 
-**Live Dashboard:** https://lk-flood-api.vercel.app/dashboard
+**API Swagger UI:** https://lk-flood-api.vercel.app/docs
 
-**API Docs:** https://lk-flood-api.vercel.app/docs
+**API Docs:** https://lk-flood-api.vercel.app/redoc
+
+**Sample Live Dashboard:** https://lk-flood-api.vercel.app/dashboard
 
 ## Features
 
