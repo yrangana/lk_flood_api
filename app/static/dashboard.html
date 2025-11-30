@@ -147,6 +147,23 @@
         .status-badge.alert { background: #ffc107; color: #000; }
         .status-badge.normal { background: #28a745; }
         .status-badge.no-data { background: #6c757d; }
+        .chart-btn {
+            background: #0f3460;
+            border: none;
+            color: #fff;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 0.5rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .chart-btn:hover {
+            background: #1a4a7a;
+        }
         .trend {
             font-size: 0.875rem;
             margin-top: 0.5rem;
@@ -179,6 +196,70 @@
             justify-content: center;
             align-items: center;
             height: 200px;
+            color: #888;
+        }
+        /* Modal styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-content {
+            background: #16213e;
+            border-radius: 12px;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            background: #0f3460;
+        }
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .modal-body {
+            padding: 1rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 300px;
+        }
+        .modal-body img {
+            max-width: 100%;
+            max-height: 75vh;
+            border-radius: 8px;
+        }
+        .modal-loading {
             color: #888;
         }
         @media (max-width: 768px) {
@@ -224,6 +305,19 @@
             </div>
             <div class="station-list" id="station-list">
                 <div class="loading">Loading data...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart Modal -->
+    <div class="modal-overlay" id="chart-modal" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span class="modal-title" id="modal-title">Station Chart</span>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <span class="modal-loading">Loading chart...</span>
             </div>
         </div>
     </div>
@@ -379,6 +473,9 @@
                         ${level.rising_or_falling ? `
                             <div class="trend ${trendClass}">${trendIcon} ${level.rising_or_falling}</div>
                         ` : ''}
+                        <button class="chart-btn" onclick="event.stopPropagation(); showChart('${level.station_name}')">
+                            📈 View Chart
+                        </button>
                     </div>
                 `;
             }).join('');
@@ -436,6 +533,38 @@
                 marker.openPopup();
             }
         };
+
+        window.showChart = function(stationName) {
+            const modal = document.getElementById('chart-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalBody = document.getElementById('modal-body');
+
+            modalTitle.textContent = `${stationName} - Water Level Chart`;
+            modalBody.innerHTML = '<span class="modal-loading">Loading chart...</span>';
+            modal.classList.add('active');
+
+            // Load chart image
+            const img = new Image();
+            img.onload = function() {
+                modalBody.innerHTML = '';
+                modalBody.appendChild(img);
+            };
+            img.onerror = function() {
+                modalBody.innerHTML = '<span class="modal-loading">Chart not available for this station</span>';
+            };
+            img.src = `${API_BASE}/levels/chart/${encodeURIComponent(stationName)}`;
+            img.alt = `${stationName} water level chart`;
+        };
+
+        window.closeModal = function(event) {
+            if (event && event.target !== event.currentTarget) return;
+            document.getElementById('chart-modal').classList.remove('active');
+        };
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
 
         async function loadData() {
             const [stations, levels, summary] = await Promise.all([
