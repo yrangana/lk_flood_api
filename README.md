@@ -14,9 +14,22 @@ REST API for Sri Lanka river water level and flood monitoring data.
 
 - Real-time water level data for 39 gauging stations
 - Alert status classification (MAJOR, MINOR, ALERT, NORMAL)
-- Historical water level readings
+- Historical water level readings (~8 days)
 - River and basin information
 - Flood map and station chart images
+- Interactive dashboard with water level trend charts
+
+## Live Demo
+
+**Dashboard:** https://lk-flood-api.vercel.app/demo/stations
+
+Interactive map with color-coded markers showing real-time flood status across Sri Lanka.
+
+![Dashboard](docs/dashboard.png)
+
+Click "View Chart" on any station to see historical water level trends with threshold lines:
+
+![Water Level Chart](docs/dashboard-chart.png)
 
 ## API Documentation
 
