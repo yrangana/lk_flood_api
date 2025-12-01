@@ -154,6 +154,17 @@ async def get_river_basins() -> list[dict]:
     return list(basins.values())
 
 
+def parse_timestamp_from_filename(filename: str) -> str:
+    """Extract timestamp from filename like '2025-12-01-12-30-water-level.json'."""
+    # Remove the '-water-level.json' suffix
+    date_part = filename.replace("-water-level.json", "")
+    # Parse: 2025-12-01-12-30 -> 2025-12-01 12:30:00
+    parts = date_part.split("-")
+    if len(parts) >= 5:
+        return f"{parts[0]}-{parts[1]}-{parts[2]} {parts[3]}:{parts[4]}:00"
+    return ""
+
+
 async def get_latest_water_levels() -> list[dict]:
     """Get the latest water level readings for all stations."""
     cache_key = "latest_water_levels"
@@ -167,6 +178,9 @@ async def get_latest_water_levels() -> list[dict]:
     data = await fetch_json(f"data/jsons/{filename}")
     if not data:
         return []
+
+    # Extract timestamp from filename (more reliable than time_str in data)
+    file_timestamp = parse_timestamp_from_filename(filename)
 
     # lk_dmc_vis format: {"d_list": [...]}
     d_list = data.get("d_list", []) if isinstance(data, dict) else data
@@ -227,8 +241,8 @@ async def get_latest_water_levels() -> list[dict]:
             "major_flood_level": major_flood_level,
         }) if alert_level > 0 else None
 
-        # Get timestamp from time_str
-        timestamp = item.get("time_str", "")
+        # Use filename timestamp (more reliable than time_str which can be buggy)
+        timestamp = file_timestamp
 
         # Get rising/falling status
         rising_or_falling = item.get("rising_or_falling", "")
