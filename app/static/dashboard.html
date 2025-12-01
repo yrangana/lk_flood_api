@@ -275,10 +275,12 @@
         }
         .modal-body {
             padding: 1rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 300px;
+            position: relative;
+            min-height: 400px;
+        }
+        .modal-body canvas {
+            width: 100% !important;
+            height: 400px !important;
         }
         .modal-body img {
             max-width: 100%;
@@ -287,6 +289,13 @@
         }
         .modal-loading {
             color: #888;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .modal-loading.hidden {
+            display: none;
         }
         .modal-footer {
             padding: 0.75rem 1rem;
@@ -365,15 +374,18 @@
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body" id="modal-body">
-                <span class="modal-loading">Loading chart...</span>
+                <canvas id="water-level-chart"></canvas>
+                <div class="modal-loading" id="chart-loading">Loading chart...</div>
             </div>
             <div class="modal-footer">
-                Chart by <a href="https://github.com/nuuuwan/lk_dmc_vis" target="_blank">nuuuwan/lk_dmc_vis</a> | Data from <a href="https://www.dmc.gov.lk" target="_blank">Sri Lanka DMC</a>
+                Data from <a href="https://github.com/nuuuwan/lk_irrigation" target="_blank">nuuuwan/lk_irrigation</a> | Source: <a href="https://www.dmc.gov.lk" target="_blank">Sri Lanka DMC</a>
             </div>
         </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script>
         // v3 - with filters
         const API_BASE = window.location.origin;
@@ -419,13 +431,14 @@
             if (!ts) return 'N/A';
             // Convert "2025-11-30 12:30:00" to ISO format for proper parsing
             const isoTs = ts.replace(' ', 'T') + '+05:30'; // Sri Lanka timezone
-            return new Date(isoTs).toLocaleString('en-LK', {
+            return new Date(isoTs).toLocaleString('en-US', {
                 timeZone: 'Asia/Colombo',
                 month: 'short',
                 day: 'numeric',
                 hour: '2-digit',
-                minute: '2-digit'
-            });
+                minute: '2-digit',
+                hour12: true
+            }) + ' (LK)';
         }
 
         async function fetchStations() {
@@ -570,7 +583,8 @@
                         <p><strong>Water Level:</strong> ${level?.water_level?.toFixed(2) || 'N/A'} m</p>
                         <p><strong>Status:</strong> ${status}</p>
                         ${level?.rising_or_falling ? `<p><strong>Trend:</strong> ${level.rising_or_falling}</p>` : ''}
-                        <button class="popup-chart-btn" onclick="showChart('${station.name}')">📈 View Chart</button>
+                        ${level?.timestamp ? `<p><strong>Updated:</strong> ${formatTimestamp(level.timestamp)}</p>` : ''}
+                        <button class="popup-chart-btn" onclick="showChart('${station.name}')">View Chart</button>
                         <p><strong>Alert Level:</strong> ${station.alert_level} m</p>
                         <p><strong>Minor Flood:</strong> ${station.minor_flood_level} m</p>
                         <p><strong>Major Flood:</strong> ${station.major_flood_level} m</p>
@@ -588,26 +602,232 @@
             }
         };
 
-        window.showChart = function(stationName) {
+        let waterLevelChart = null;
+
+        window.showChart = async function(stationName) {
             const modal = document.getElementById('chart-modal');
             const modalTitle = document.getElementById('modal-title');
-            const modalBody = document.getElementById('modal-body');
+            const chartLoading = document.getElementById('chart-loading');
+            const canvas = document.getElementById('water-level-chart');
 
             modalTitle.textContent = `${stationName} - Water Level Chart`;
-            modalBody.innerHTML = '<span class="modal-loading">Loading chart...</span>';
+            chartLoading.classList.remove('hidden');
             modal.classList.add('active');
 
-            // Load chart image
-            const img = new Image();
-            img.onload = function() {
-                modalBody.innerHTML = '';
-                modalBody.appendChild(img);
-            };
-            img.onerror = function() {
-                modalBody.innerHTML = '<span class="modal-loading">Chart not available for this station</span>';
-            };
-            img.src = `${API_BASE}/levels/chart/${encodeURIComponent(stationName)}`;
-            img.alt = `${stationName} water level chart`;
+            // Destroy existing chart if any
+            if (waterLevelChart) {
+                waterLevelChart.destroy();
+                waterLevelChart = null;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/levels/chart-data/${encodeURIComponent(stationName)}`);
+                if (!response.ok) throw new Error('Failed to fetch chart data');
+                const data = await response.json();
+
+                chartLoading.classList.add('hidden');
+
+                // Prepare chart data - use unix timestamp (time_ut) for accurate time
+                // Multiply by 1000 to convert seconds to milliseconds for JS Date
+                const chartData = data.history.map(h => ({
+                    x: h.time_ut * 1000,  // Unix timestamp in ms
+                    y: h.water_level
+                }));
+
+                // Create threshold annotations
+                const annotations = {};
+                if (data.alert_level > 0) {
+                    annotations.alertLine = {
+                        type: 'line',
+                        yMin: data.alert_level,
+                        yMax: data.alert_level,
+                        borderColor: '#ffc107',
+                        borderWidth: 2,
+                        borderDash: [6, 6],
+                        label: {
+                            display: true,
+                            content: 'Alert',
+                            position: 'start',
+                            backgroundColor: '#ffc107',
+                            color: '#000'
+                        }
+                    };
+                }
+                if (data.minor_flood_level > 0) {
+                    annotations.minorLine = {
+                        type: 'line',
+                        yMin: data.minor_flood_level,
+                        yMax: data.minor_flood_level,
+                        borderColor: '#fd7e14',
+                        borderWidth: 2,
+                        borderDash: [6, 6],
+                        label: {
+                            display: true,
+                            content: 'Minor Flood',
+                            position: 'start',
+                            backgroundColor: '#fd7e14',
+                            color: '#fff'
+                        }
+                    };
+                }
+                if (data.major_flood_level > 0) {
+                    annotations.majorLine = {
+                        type: 'line',
+                        yMin: data.major_flood_level,
+                        yMax: data.major_flood_level,
+                        borderColor: '#dc3545',
+                        borderWidth: 2,
+                        borderDash: [6, 6],
+                        label: {
+                            display: true,
+                            content: 'Major Flood',
+                            position: 'start',
+                            backgroundColor: '#dc3545',
+                            color: '#fff'
+                        }
+                    };
+                }
+
+                // Create chart
+                const ctx = canvas.getContext('2d');
+                waterLevelChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Water Level (m)',
+                            data: chartData,
+                            borderColor: '#4dabf7',
+                            backgroundColor: 'rgba(77, 171, 247, 0.1)',
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 3,
+                            pointHoverRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `${data.station_name} - ${data.river_name || 'Water Level'}`,
+                                color: '#eee',
+                                font: { size: 16 }
+                            },
+                            legend: {
+                                labels: { color: '#ccc' }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(tooltipItems) {
+                                        // Format tooltip title in Sri Lanka timezone
+                                        const date = new Date(tooltipItems[0].parsed.x);
+                                        return date.toLocaleString('en-US', {
+                                            timeZone: 'Asia/Colombo',
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            hour12: false
+                                        }) + ' (Sri Lanka)';
+                                    },
+                                    label: function(context) {
+                                        return `Water Level: ${context.parsed.y?.toFixed(2) || 'N/A'} m`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    displayFormats: {
+                                        hour: 'MMM d, HH:mm',
+                                        day: 'MMM d'
+                                    }
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Time (Sri Lanka)',
+                                    color: '#aaa'
+                                },
+                                ticks: {
+                                    color: '#aaa',
+                                    callback: function(value) {
+                                        // Format in Sri Lanka timezone (Asia/Colombo)
+                                        const date = new Date(value);
+                                        return date.toLocaleString('en-US', {
+                                            timeZone: 'Asia/Colombo',
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            hour12: false
+                                        });
+                                    }
+                                },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Water Level (m)',
+                                    color: '#aaa'
+                                },
+                                ticks: { color: '#aaa' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            }
+                        }
+                    }
+                });
+
+                // Add threshold lines manually (since annotation plugin may not be loaded)
+                // We'll draw them as additional datasets
+                if (data.alert_level > 0 || data.minor_flood_level > 0 || data.major_flood_level > 0) {
+                    const xMin = chartData[0]?.x;
+                    const xMax = chartData[chartData.length - 1]?.x;
+
+                    if (data.alert_level > 0) {
+                        waterLevelChart.data.datasets.push({
+                            label: `Alert (${data.alert_level}m)`,
+                            data: [{x: xMin, y: data.alert_level}, {x: xMax, y: data.alert_level}],
+                            borderColor: '#ffc107',
+                            borderWidth: 2,
+                            borderDash: [6, 6],
+                            pointRadius: 0,
+                            fill: false
+                        });
+                    }
+                    if (data.minor_flood_level > 0) {
+                        waterLevelChart.data.datasets.push({
+                            label: `Minor Flood (${data.minor_flood_level}m)`,
+                            data: [{x: xMin, y: data.minor_flood_level}, {x: xMax, y: data.minor_flood_level}],
+                            borderColor: '#fd7e14',
+                            borderWidth: 2,
+                            borderDash: [6, 6],
+                            pointRadius: 0,
+                            fill: false
+                        });
+                    }
+                    if (data.major_flood_level > 0) {
+                        waterLevelChart.data.datasets.push({
+                            label: `Major Flood (${data.major_flood_level}m)`,
+                            data: [{x: xMin, y: data.major_flood_level}, {x: xMax, y: data.major_flood_level}],
+                            borderColor: '#dc3545',
+                            borderWidth: 2,
+                            borderDash: [6, 6],
+                            pointRadius: 0,
+                            fill: false
+                        });
+                    }
+                    waterLevelChart.update();
+                }
+
+            } catch (error) {
+                console.error('Error loading chart:', error);
+                chartLoading.textContent = 'Failed to load chart data';
+                chartLoading.classList.remove('hidden');
+            }
         };
 
         window.closeModal = function(event) {

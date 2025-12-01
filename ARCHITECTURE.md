@@ -2,26 +2,32 @@
 
 ## Overview
 
-This is a stateless FastAPI REST API that wraps flood monitoring data from Sri Lanka's Disaster Management Center (DMC). It fetches and caches data from the [nuuuwan/lk_dmc_vis](https://github.com/nuuuwan/lk_dmc_vis) GitHub repository.
+This is a stateless FastAPI REST API that wraps flood monitoring data from Sri Lanka's Disaster Management Center (DMC). It fetches and caches data from two GitHub repositories:
+- [nuuuwan/lk_irrigation](https://github.com/nuuuwan/lk_irrigation) - Fresh water levels and historical data
+- [nuuuwan/lk_dmc_vis](https://github.com/nuuuwan/lk_dmc_vis) - Metadata (remarks, trend) and images
 
 ## System Architecture
 
 ```mermaid
 flowchart TB
-    subgraph External["External Data Source"]
+    subgraph External["External Data Sources"]
         DMC["Sri Lanka DMC
-        dmc.gov.lk"] -->|PDF Reports| Pipeline
-        Pipeline["nuuuwan/lk_dmc_vis
-        (GitHub Actions)"]
-        Pipeline -->|Every 15 min| GH[("GitHub Repository
+        dmc.gov.lk"] -->|PDF Reports| Pipeline1
+        DMC -->|PDF Reports| Pipeline2
+        Pipeline1["nuuuwan/lk_irrigation
+        (Water Levels)"]
+        Pipeline2["nuuuwan/lk_dmc_vis
+        (Metadata, Images)"]
+        Pipeline1 -->|Every ~10 min| GH[("GitHub Repository
         raw.githubusercontent.com")]
+        Pipeline2 -->|Every ~3 hours| GH
     end
 
     subgraph API["This API (FastAPI)"]
         GH -->|HTTPS| Service["github_data.py
         Data Service"]
         Service --> Cache[("TTLCache
-        15 min TTL")]
+        5 min TTL")]
         Cache --> Routes
 
         subgraph Routes["Route Handlers"]
@@ -50,33 +56,40 @@ flowchart TB
 
 ## Data Files Structure
 
-The upstream [nuuuwan/lk_dmc_vis](https://github.com/nuuuwan/lk_dmc_vis) repository provides:
+Data is sourced from two upstream repositories:
 
 ```mermaid
 flowchart LR
-    subgraph Static["Static Data"]
+    subgraph Irrigation["lk_irrigation (Fresh Data)"]
+        LATEST["latest-100.json
+        (Current water levels)"]
+        ALL["all.json
+        (8 days history)"]
+        STATIC_IRR["static/stations.json
+        (Thresholds)"]
+    end
+
+    subgraph DMC["lk_dmc_vis (Metadata & Images)"]
         GS["gauging_stations.json
-        (39 stations)"]
-        RV["rivers.json
-        (26 rivers)"]
-        RB["river_basins.json
-        (18 basins)"]
-    end
-
-    subgraph Dynamic["Dynamic Data (Updated Every 15 min)"]
-        IDX["docs_last100.tsv
-        (Report Index)"]
+        (Station coords)"]
         JSON["jsons/*.json
-        (Water Level Data)"]
-    end
-
-    subgraph Images["Generated Images"]
-        MAP["map.png
+        (Remarks, trend, rainfall)"]
+        MAP["images/map.png
         (Flood Map)"]
-        CHARTS["stations/*.png
+        CHARTS["images/stations/*.png
         (Station Charts)"]
     end
 ```
+
+| Source | File | Purpose | Update Frequency |
+|--------|------|---------|------------------|
+| lk_irrigation | `latest-100.json` | Current water levels | ~10 min |
+| lk_irrigation | `all.json` | Historical data (~8 days) | ~10 min |
+| lk_irrigation | `static/stations.json` | Station thresholds | Static |
+| lk_dmc_vis | `jsons/*.json` | Remarks, rising/falling, rainfall | ~3 hours |
+| lk_dmc_vis | `gauging_stations.json` | Station coordinates | Static |
+| lk_dmc_vis | `images/map.png` | Flood map image | ~3 hours |
+| lk_dmc_vis | `images/stations/*.png` | Pre-rendered charts | ~3 hours |
 
 ## Project Structure
 
@@ -90,12 +103,12 @@ lk_flood_api/
 │   │   ├── stations.py      # GET /stations, /stations/{name}
 │   │   ├── rivers.py        # GET /rivers, /rivers/{name}, /rivers/{name}/stations
 │   │   ├── basins.py        # GET /basins, /basins/{name}, /basins/{name}/rivers
-│   │   ├── levels.py        # GET /levels/latest, /levels/history, /levels/map, /levels/chart
+│   │   ├── levels.py        # GET /levels/latest, /levels/history, /levels/chart-data, /levels/map, /levels/chart
 │   │   └── alerts.py        # GET /alerts, /alerts/summary
 │   ├── services/
 │   │   └── github_data.py   # Data fetching, caching, calculations
 │   └── static/
-│       └── dashboard.html   # Interactive map dashboard (Leaflet.js)
+│       └── dashboard.html   # Interactive map dashboard (Leaflet.js + Chart.js)
 ├── requirements.txt
 ├── vercel.json
 └── README.md
@@ -224,6 +237,7 @@ sequenceDiagram
 | [Pydantic](https://docs.pydantic.dev/) | Data validation |
 | [cachetools](https://cachetools.readthedocs.io/) | TTL-based caching |
 | [Leaflet.js](https://leafletjs.com/) | Interactive map (dashboard) |
+| [Chart.js](https://www.chartjs.org/) | Water level trend charts (dashboard) |
 
 ## Demo Dashboard
 
@@ -233,15 +247,20 @@ The `/demo/stations` endpoint serves a single-page application that visualizes s
 flowchart LR
     Browser["Browser"] -->|GET /demo/stations| Server["FastAPI"]
     Server -->|dashboard.html| Browser
-    Browser -->|Fetch /stations, /levels/latest, /alerts/summary| Server
+    Browser -->|Fetch /levels/latest, /alerts/summary| Server
     Server -->|JSON| Browser
     Browser -->|Render| Map["Leaflet Map + Station List"]
+    Browser -->|Click View Chart| ChartModal["Chart.js Modal"]
+    ChartModal -->|Fetch /levels/chart-data/{station}| Server
 ```
 
 **Features:**
 - Interactive map with color-coded station markers
 - Sidebar with filterable station list (MAJOR first)
 - Filter buttons by alert level
+- Chart.js water level trend charts (~8 days history)
+- Threshold lines (Alert, Minor Flood, Major Flood) on charts
+- All timestamps displayed in Sri Lanka timezone (UTC+5:30)
 - Auto-refresh every 5 minutes
 - Mobile responsive design
 - Dark theme using CartoDB tiles
@@ -250,7 +269,7 @@ flowchart LR
 
 1. **Stateless Architecture**: No database. Data fetched on-demand from GitHub keeps the API always in sync with the source.
 
-2. **15-minute Cache**: Matches the upstream update frequency. Reduces GitHub API load while keeping data fresh.
+2. **5-minute Cache**: More aggressive caching since lk_irrigation updates frequently (~10 min). Reduces GitHub API load while keeping data fresh.
 
 3. **Async Throughout**: Uses `httpx` and async functions for non-blocking I/O, enabling high concurrency.
 
@@ -258,9 +277,14 @@ flowchart LR
 
 5. **Image Proxying**: Serves map and chart images through the API with cache headers, enabling CORS access from web apps.
 
+6. **Dual Data Source Merging**: Combines fresher water levels from lk_irrigation with metadata (remarks, trend, rainfall) from lk_dmc_vis for the best of both sources.
+
+7. **Sri Lanka Timezone**: All timestamps are generated in Sri Lanka timezone (UTC+5:30) regardless of server location.
+
 ## Data Source Acknowledgment
 
 This API relies entirely on data from:
 
-- **[nuuuwan/lk_dmc_vis](https://github.com/nuuuwan/lk_dmc_vis)** - Open-source data pipeline by [@nuuuwan](https://github.com/nuuuwan)
+- **[nuuuwan/lk_irrigation](https://github.com/nuuuwan/lk_irrigation)** - Open-source data pipeline by [@nuuuwan](https://github.com/nuuuwan) (fresh water levels)
+- **[nuuuwan/lk_dmc_vis](https://github.com/nuuuwan/lk_dmc_vis)** - Open-source data pipeline by [@nuuuwan](https://github.com/nuuuwan) (metadata, images)
 - **[Sri Lanka Disaster Management Center](https://www.dmc.gov.lk)** - Original source of flood monitoring data

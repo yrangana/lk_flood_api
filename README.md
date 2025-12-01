@@ -31,16 +31,23 @@ REST API for Sri Lanka river water level and flood monitoring data.
 ```mermaid
 flowchart LR
     DMC[("Sri Lanka DMC
-    (PDF Reports)")] --> Pipeline
-    Pipeline["nuuuwan/lk_dmc_vis
-    (Data Pipeline)"] --> GitHub[("GitHub
+    (PDF Reports)")] --> Pipeline1
+    DMC --> Pipeline2
+    Pipeline1["nuuuwan/lk_dmc_vis
+    (Metadata, Images)"] --> GitHub[("GitHub
     Raw Files")]
+    Pipeline2["nuuuwan/lk_irrigation
+    (Water Levels, History)"] --> GitHub
     GitHub --> API["This API
     (FastAPI)"]
     API --> Apps["Web Apps
     Mobile Apps
     Alert Systems"]
 ```
+
+The API merges data from two upstream sources:
+- **lk_irrigation**: Fresh water levels (updates every ~10 min) + 8 days of historical data
+- **lk_dmc_vis**: Metadata (remarks, rising/falling, rainfall) + pre-rendered images
 
 ## API Endpoints
 
@@ -73,9 +80,10 @@ flowchart LR
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/levels/latest` | Latest readings for all stations |
-| GET | `/levels/history/{station}?limit=50` | Historical readings for a station |
+| GET | `/levels/history/{station}?limit=200` | Historical readings (~8 days) |
+| GET | `/levels/chart-data/{station}` | Chart data with thresholds (for Chart.js) |
 | GET | `/levels/map` | Current flood map (PNG) |
-| GET | `/levels/chart/{station}` | Station chart (PNG) |
+| GET | `/levels/chart/{station}` | Pre-rendered station chart (PNG) |
 
 ### Alerts
 | Method | Endpoint | Description |
@@ -86,7 +94,7 @@ flowchart LR
 ### Dashboard
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/demo/stations` | Interactive map showing station locations and alert status |
+| GET | `/demo/stations` | Interactive map with station locations, alert status, and Chart.js water level charts |
 
 ## Local Development
 
@@ -106,11 +114,17 @@ Visit http://localhost:8000/docs for interactive API documentation (Swagger UI).
 
 ## Data Source & Acknowledgments
 
-This API consumes data from [**nuuuwan/lk_dmc_vis**](https://github.com/nuuuwan/lk_dmc_vis), an open-source data pipeline by [@nuuuwan](https://github.com/nuuuwan) that:
+This API consumes data from two open-source data pipelines by [@nuuuwan](https://github.com/nuuuwan):
 
-1. Fetches PDF flood reports from the [Sri Lanka Disaster Management Center (DMC)](https://www.dmc.gov.lk)
-2. Parses and extracts water level data using OCR/PDF processing
-3. Publishes structured JSON data to GitHub every 15 minutes
+| Repository | Data Provided | Update Frequency |
+|------------|--------------|------------------|
+| [nuuuwan/lk_irrigation](https://github.com/nuuuwan/lk_irrigation) | Water levels, historical data | ~10 minutes |
+| [nuuuwan/lk_dmc_vis](https://github.com/nuuuwan/lk_dmc_vis) | Metadata (remarks, trend), images | ~3 hours |
+
+Both pipelines:
+1. Fetch data from the [Sri Lanka Disaster Management Center (DMC)](https://www.dmc.gov.lk)
+2. Parse and extract water level data
+3. Publish structured JSON data to GitHub
 
 ### Original Data Source
 

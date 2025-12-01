@@ -1,13 +1,17 @@
 import httpx
 from cachetools import TTLCache
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+# Sri Lanka timezone (UTC+5:30)
+LK_TZ = timezone(timedelta(hours=5, minutes=30))
 
 BASE_URL = "https://raw.githubusercontent.com/nuuuwan/lk_dmc_vis/main"
 GITHUB_API_URL = "https://api.github.com/repos/nuuuwan/lk_dmc_vis/contents"
+IRRIGATION_BASE_URL = "https://raw.githubusercontent.com/nuuuwan/lk_irrigation/main"
 
-# Cache data for 15 minutes (900 seconds) - matches pipeline update frequency
-cache = TTLCache(maxsize=100, ttl=900)
+# Cache data for 5 minutes (300 seconds) - irrigation data updates more frequently
+cache = TTLCache(maxsize=100, ttl=300)
 
 
 def cached(key_func):
@@ -33,6 +37,91 @@ async def fetch_json(path: str) -> dict | list | None:
             return response.json()
         except httpx.HTTPError:
             return None
+
+
+async def fetch_irrigation_json(path: str) -> dict | list | None:
+    """Fetch JSON from lk_irrigation repo."""
+    url = f"{IRRIGATION_BASE_URL}/{path}"
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, timeout=30.0)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError:
+            return None
+
+
+@cached(lambda: "irrigation_stations_static")
+async def get_irrigation_stations_static() -> list[dict]:
+    """Get static station data from lk_irrigation (has thresholds and coords)."""
+    data = await fetch_irrigation_json("data/static/stations.json")
+    return data if data else []
+
+
+@cached(lambda: "irrigation_latest_levels")
+async def get_irrigation_latest_levels() -> dict:
+    """Get latest water levels from lk_irrigation (fresher data).
+    Returns dict mapping station_name -> {water_level, timestamp}
+    """
+    data = await fetch_irrigation_json("data/latest-100.json")
+    if not data:
+        return {}
+
+    # Build dict of latest level per station
+    latest = {}
+    for rec in data:
+        station = rec.get("station_name", "")
+        time_ut = rec.get("time_ut", 0)
+        water_level = rec.get("water_level_m")
+
+        if station and (station not in latest or time_ut > latest[station]["time_ut"]):
+            latest[station] = {
+                "water_level": water_level,
+                "time_ut": time_ut,
+                "timestamp": datetime.fromtimestamp(time_ut, tz=LK_TZ).strftime("%Y-%m-%d %H:%M:%S") if time_ut else "",
+            }
+    return latest
+
+
+@cached(lambda: "irrigation_all_history")
+async def get_irrigation_all_history() -> list[dict]:
+    """Get all historical water level data from lk_irrigation."""
+    data = await fetch_irrigation_json("data/all.json")
+    return data if data else []
+
+
+async def get_station_history(station_name: str, limit: int = 200) -> list[dict]:
+    """Get historical water level readings for a specific station.
+
+    Returns list of {timestamp, water_level} sorted by time (oldest first).
+    """
+    all_data = await get_irrigation_all_history()
+    if not all_data:
+        return []
+
+    # Filter for this station (case-insensitive match)
+    station_lower = station_name.lower()
+    station_records = [
+        r for r in all_data
+        if r.get("station_name", "").lower() == station_lower
+    ]
+
+    # Sort by timestamp (oldest first for charting)
+    station_records.sort(key=lambda x: x.get("time_ut", 0))
+
+    # Limit records if needed
+    if limit and len(station_records) > limit:
+        station_records = station_records[-limit:]
+
+    # Transform to API format
+    return [
+        {
+            "timestamp": datetime.fromtimestamp(r["time_ut"], tz=LK_TZ).strftime("%Y-%m-%d %H:%M:%S") if r.get("time_ut") else "",
+            "time_ut": r.get("time_ut", 0),
+            "water_level": r.get("water_level_m"),
+        }
+        for r in station_records
+    ]
 
 
 @cached(lambda: "latest_water_level_file")
@@ -166,7 +255,14 @@ def parse_timestamp_from_filename(filename: str) -> str:
 
 
 async def get_latest_water_levels() -> list[dict]:
-    """Get the latest water level readings for all stations."""
+    """Get the latest water level readings for all stations.
+
+    Merges data from two sources:
+    - lk_irrigation: fresher water level readings (updates every few minutes)
+    - lk_dmc_vis: metadata like remarks, rising/falling, rainfall (updates every 3 hours)
+
+    Uses irrigation data for water levels when available and fresher.
+    """
     cache_key = "latest_water_levels"
     if cache_key in cache:
         return cache[cache_key]
@@ -179,8 +275,11 @@ async def get_latest_water_levels() -> list[dict]:
     if not data:
         return []
 
-    # Extract timestamp from filename (more reliable than time_str in data)
-    file_timestamp = parse_timestamp_from_filename(filename)
+    # Extract timestamp from DMC filename
+    dmc_timestamp = parse_timestamp_from_filename(filename)
+
+    # Get fresher water levels from irrigation data
+    irrigation_levels = await get_irrigation_latest_levels()
 
     # lk_dmc_vis format: {"d_list": [...]}
     d_list = data.get("d_list", []) if isinstance(data, dict) else data
@@ -198,23 +297,57 @@ async def get_latest_water_levels() -> list[dict]:
             "major_flood_level": s.get("major_flood_level", 0),
         }
 
+    # Also get irrigation static data (has better thresholds)
+    irrigation_static = await get_irrigation_stations_static()
+    irrigation_station_data = {}
+    for s in irrigation_static:
+        name = s.get("name", "")
+        irrigation_station_data[name] = {
+            "lat_lng": s.get("lat_lng", [0, 0]),
+            "river_name": s.get("river_name", ""),
+            "alert_level": s.get("alert_level_m", 0),
+            "minor_flood_level": s.get("minor_flood_level_m", 0),
+            "major_flood_level": s.get("major_flood_level_m", 0),
+        }
+
     # Transform to our API format
     results = []
+    seen_stations = set()
+
     for item in d_list:
         station_name = item.get("gauging_station_name", "")
-        water_level = item.get("current_water_level")
+        seen_stations.add(station_name)
+
+        dmc_water_level = item.get("current_water_level")
         prev_water_level = item.get("previous_water_level")
 
-        # Get static data for this station
-        normalized_name = normalize_station_name(station_name)
-        static = station_data.get(normalized_name, {})
-        lat_lng = static.get("lat_lng", [0, 0])
-        river_name = static.get("river_name", "")
+        # Check if irrigation has fresher data for this station
+        irr_data = irrigation_levels.get(station_name)
+        if irr_data and irr_data.get("water_level") is not None:
+            water_level = irr_data["water_level"]
+            timestamp = irr_data["timestamp"]
+        else:
+            water_level = dmc_water_level
+            timestamp = dmc_timestamp
 
-        # Get alert thresholds from static data
-        alert_level = static.get("alert_level", 0)
-        minor_flood_level = static.get("minor_flood_level", 0)
-        major_flood_level = static.get("major_flood_level", 0)
+        # Get static data - prefer irrigation static (better thresholds)
+        irr_static = irrigation_station_data.get(station_name, {})
+        normalized_name = normalize_station_name(station_name)
+        dmc_static = station_data.get(normalized_name, {})
+
+        # Use irrigation static if available, else DMC static
+        if irr_static:
+            lat_lng = irr_static.get("lat_lng", [0, 0])
+            river_name = irr_static.get("river_name", "") or dmc_static.get("river_name", "")
+            alert_level = irr_static.get("alert_level", 0)
+            minor_flood_level = irr_static.get("minor_flood_level", 0)
+            major_flood_level = irr_static.get("major_flood_level", 0)
+        else:
+            lat_lng = dmc_static.get("lat_lng", [0, 0])
+            river_name = dmc_static.get("river_name", "")
+            alert_level = dmc_static.get("alert_level", 0)
+            minor_flood_level = dmc_static.get("minor_flood_level", 0)
+            major_flood_level = dmc_static.get("major_flood_level", 0)
 
         # Calculate alert status from thresholds or derive from remarks
         remarks = item.get("remarks", "")
@@ -241,10 +374,7 @@ async def get_latest_water_levels() -> list[dict]:
             "major_flood_level": major_flood_level,
         }) if alert_level > 0 else None
 
-        # Use filename timestamp (more reliable than time_str which can be buggy)
-        timestamp = file_timestamp
-
-        # Get rising/falling status
+        # Get rising/falling status from DMC
         rising_or_falling = item.get("rising_or_falling", "")
 
         results.append({

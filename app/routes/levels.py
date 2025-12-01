@@ -32,40 +32,62 @@ async def get_latest_levels():
     return readings
 
 
-@router.get("/history/{station_name}", response_model=list[WaterLevelReading])
-async def get_station_history(station_name: str, limit: int = 50):
+@router.get("/history/{station_name}")
+async def get_station_history(station_name: str, limit: int = 200):
     """Get historical water level readings for a specific station.
 
-    Note: Historical data access is limited with the new data source.
-    Currently returns only the latest reading for the station.
+    Returns up to 8 days of historical data with readings every ~1 hour.
+    Data is sorted oldest to newest for charting purposes.
     """
+    # Get history from irrigation data
+    history = await github_data.get_station_history(station_name, limit=limit)
+
+    if not history:
+        # Try to find station to give better error message
+        station = await github_data.get_station_by_name(station_name)
+        if not station:
+            raise HTTPException(status_code=404, detail=f"Station '{station_name}' not found")
+        # Station exists but no history available
+        return []
+
+    return history
+
+
+@router.get("/chart-data/{station_name}")
+async def get_chart_data(station_name: str):
+    """Get chart data for a station including history and thresholds.
+
+    Returns data formatted for Chart.js rendering.
+    """
+    # Get station info for thresholds
     station = await github_data.get_station_by_name(station_name)
     if not station:
         raise HTTPException(status_code=404, detail=f"Station '{station_name}' not found")
 
-    # Get latest levels and filter for this station
-    levels = await github_data.get_latest_water_levels()
-    readings = []
+    # Get history
+    history = await github_data.get_station_history(station_name, limit=200)
 
+    # Get latest reading for current status
+    levels = await github_data.get_latest_water_levels()
+    current = None
     for level in levels:
         if level.get("station_name", "").lower() == station_name.lower():
-            readings.append(
-                WaterLevelReading(
-                    station_name=level["station_name"],
-                    river_name=level["river_name"],
-                    water_level=level.get("water_level"),
-                    previous_water_level=level.get("previous_water_level"),
-                    alert_status=level["alert_status"],
-                    flood_score=level.get("flood_score"),
-                    rising_or_falling=level.get("rising_or_falling"),
-                    rainfall_mm=level.get("rainfall_mm"),
-                    remarks=level.get("remarks"),
-                    timestamp=level.get("timestamp", ""),
-                )
-            )
+            current = level
             break
 
-    return readings
+    return {
+        "station_name": station["name"],
+        "river_name": station.get("river_name", ""),
+        "alert_level": station.get("alert_level", 0),
+        "minor_flood_level": station.get("minor_flood_level", 0),
+        "major_flood_level": station.get("major_flood_level", 0),
+        "current": {
+            "water_level": current.get("water_level") if current else None,
+            "alert_status": current.get("alert_status") if current else "NO_DATA",
+            "timestamp": current.get("timestamp") if current else "",
+        },
+        "history": history,
+    }
 
 
 @router.get("/map")
